@@ -68,7 +68,8 @@ let pickupsDone = 0, cycleStart = performance.now();
 let inputQ = []; let lastY=false, lastA=false;
 let recording = false, recordBuf = [];
 let playing = false, playBuf = [], playIdx = 0, playT0 = 0;
-let defenderOn = false, defender = { x:0, y:0, vmax: 3.0, vx:0, vy:0 };
+let defenderOn = false,
+    defender = { x:0, y:0, vx:0, vy:0, vmax:0, mass_kg:0 };
 let running = false;
 const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
 const db = (v,d)=> Math.abs(v)<d ? 0 : (v - Math.sign(v)*d)/(1-d);
@@ -109,6 +110,12 @@ function computeDerivedLimits(){
   const omMotor = (AZ.neo550_free_rpm * 2*Math.PI) / 60; lim.omAzFree = (omMotor / AZ.total_ratio);
   hud.freeV.textContent = lim.vFree.toFixed(2);
   hud.freeW.textContent = lim.omAzFree.toFixed(1);
+  updateDefenderStats();
+}
+
+function updateDefenderStats(){
+  defender.vmax = lim.vFree;
+  defender.mass_kg = profile.mass_kg * 1.2;
 }
 
 function resizeSim(){
@@ -140,13 +147,13 @@ const layouts = {
       { x: fieldPxW*0.6, y: fieldPxH*0.5, r: field.pxPerM*1.0 },
       { x: fieldPxW*0.3, y: fieldPxH*0.7, r: field.pxPerM*0.7 }
     ];
-    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, vx:0, vy:0 };
+    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vx:0, vy:0 };
   },
   clear(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
     goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [];
-    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, vx:0, vy:0 };
+    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vx:0, vy:0 };
   },
   obstacle(){
     station = { x: fieldPxW*0.25, y: fieldPxH - 60, r: 40 };
@@ -156,7 +163,7 @@ const layouts = {
       { x: fieldPxW*0.3, y: fieldPxH*0.6, r: field.pxPerM*0.8 },
       { x: fieldPxW*0.7, y: fieldPxH*0.7, r: field.pxPerM*0.6 }
     ];
-    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, vx:0, vy:0 };
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vx:0, vy:0 };
   },
   slalom(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
@@ -166,7 +173,7 @@ const layouts = {
       { x: fieldPxW*0.5, y: fieldPxH*0.3, r: field.pxPerM*0.8 },
       { x: fieldPxW*0.7, y: fieldPxH*0.5, r: field.pxPerM*0.8 }
     ];
-    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, vx:0, vy:0 };
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vx:0, vy:0 };
   },
   gauntlet(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
@@ -177,7 +184,7 @@ const layouts = {
       { x: fieldPxW*0.6, y: fieldPxH*0.6, r: field.pxPerM*0.6 },
       { x: fieldPxW*0.7, y: fieldPxH*0.4, r: field.pxPerM*0.6 }
     ];
-    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, vx:0, vy:0 };
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vx:0, vy:0 };
   },
   cluster(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
@@ -187,7 +194,7 @@ const layouts = {
       { x: fieldPxW*0.35, y: fieldPxH*0.4, r: field.pxPerM*0.6 },
       { x: fieldPxW*0.65, y: fieldPxH*0.6, r: field.pxPerM*0.6 }
     ];
-    defender = { x: fieldPxW*0.55, y: fieldPxH*0.55, vmax:3.0, vx:0, vy:0 };
+    defender = { x: fieldPxW*0.55, y: fieldPxH*0.55, vx:0, vy:0 };
   }
 };
 function pollGamepad(){
@@ -275,18 +282,13 @@ function step(dt){
   }
   if (defenderOn){
     const vmax = defender.vmax * field.pxPerM;
-    // Choose a target point for the defender. If the robot is carrying a ball,
-    // try to position between the robot and the goal to block scoring. When not
-    // carrying, simply chase the robot.
-    let tx = pose.x, ty = pose.y;
-    if (carrying){
-      tx = (pose.x + goal.x) / 2;
-      ty = (pose.y + goal.y) / 2;
-    }
-    const dx = tx - defender.x, dy = ty - defender.y;
-    const d = Math.hypot(dx, dy) || 1e-6;
-    defender.vx = dx / d * vmax;
-    defender.vy = dy / d * vmax;
+    const amax = (lim.Fmax / defender.mass_kg) * field.pxPerM;
+    const dx = pose.x - defender.x, dy = pose.y - defender.y;
+    const dist = Math.hypot(dx, dy) || 1e-6;
+    const desiredVx = dx / dist * vmax;
+    const desiredVy = dy / dist * vmax;
+    defender.vx += clamp(desiredVx - defender.vx, -amax * dt, amax * dt);
+    defender.vy += clamp(desiredVy - defender.vy, -amax * dt, amax * dt);
     defender.x += defender.vx * dt;
     defender.y += defender.vy * dt;
     defender.x = clamp(defender.x, 60, fieldPxW - 60);
@@ -297,26 +299,28 @@ function step(dt){
       const minD = o.r + robotR;
       if (dist2 < minD){ const s = minD / dist2; defender.x = o.x + ddx * s; defender.y = o.y + ddy * s; }
     }
-    // Collision with the robot and pushing physics.
+    // Collision with the robot and pushing physics with mass.
     const ddx = pose.x - defender.x, ddy = pose.y - defender.y;
-    const dist = Math.hypot(ddx, ddy) || 1e-6;
+    const d = Math.hypot(ddx, ddy) || 1e-6;
     const minSep = robotR * 2;
-    if (dist < minSep){
-      const overlap = minSep - dist;
-      const nx = ddx / dist, ny = ddy / dist;
-      // Separate the two robots equally.
-      pose.x += nx * overlap / 2; pose.y += ny * overlap / 2;
-      defender.x -= nx * overlap / 2; defender.y -= ny * overlap / 2;
-      // Relative velocity along the collision normal in px/s.
+    if (d < minSep){
+      const overlap = minSep - d;
+      const nx = ddx / d, ny = ddy / d;
+      const totalM = profile.mass_kg + defender.mass_kg;
+      pose.x += nx * overlap * (defender.mass_kg / totalM);
+      pose.y += ny * overlap * (defender.mass_kg / totalM);
+      defender.x -= nx * overlap * (profile.mass_kg / totalM);
+      defender.y -= ny * overlap * (profile.mass_kg / totalM);
       const rvx = velAct.vx * field.pxPerM, rvy = velAct.vy * field.pxPerM;
       const rel = (rvx - defender.vx) * nx + (rvy - defender.vy) * ny;
       if (rel < 0){
-        const e = 0.2; // restitution
-        const j = -(1 + e) * rel / 2; // equal masses
+        const e = 0.2;
+        const j = -(1 + e) * rel / (1 / profile.mass_kg + 1 / defender.mass_kg);
         const jx = j * nx, jy = j * ny;
-        velAct.vx = (rvx + jx) / field.pxPerM;
-        velAct.vy = (rvy + jy) / field.pxPerM;
-        defender.vx -= jx; defender.vy -= jy;
+        velAct.vx = (rvx + jx / profile.mass_kg) / field.pxPerM;
+        velAct.vy = (rvy + jy / profile.mass_kg) / field.pxPerM;
+        defender.vx -= jx / defender.mass_kg;
+        defender.vy -= jy / defender.mass_kg;
       }
     }
   }
@@ -432,6 +436,7 @@ function resetCycle(){
   moduleAngles=[0,0,0,0];
   carrying=false;
   layouts[layoutKey] && layouts[layoutKey]();
+  updateDefenderStats();
   ball = { x: station.x, y: station.y, r: 15 };
   cycleStart=performance.now(); pickupsDone=0; updateHUD();
   recording=false; recordBuf=[]; playing=false;
