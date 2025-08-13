@@ -222,8 +222,9 @@ function drawOrientationWindow(){
   orientCtx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
   orientCtx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
   orientCtx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
-  const wheelR = 12 * fac;
-  const moduleHalf = 16 * fac;
+  // Scale wheel modules so all four fit without overlapping.
+  const moduleHalf = Math.min(16 * fac, frameL / 4, frameW / 4);
+  const wheelR = moduleHalf * (12 / 16);
   const corners = [
     {x:+frameL/2 - moduleHalf, y:-frameW/2 + moduleHalf},
     {x:+frameL/2 - moduleHalf, y:+frameW/2 - moduleHalf},
@@ -232,12 +233,13 @@ function drawOrientationWindow(){
   ];
   for (let i=0;i<4;i++){
     const c = corners[i]; orientCtx.save(); orientCtx.translate(c.x, c.y);
-    orientCtx.fillStyle = '#2b3a49'; roundRectPath(orientCtx, -16*fac,-16*fac,32*fac,32*fac,6*fac); orientCtx.fill();
+    const cornerR = moduleHalf * (6 / 16);
+    orientCtx.fillStyle = '#2b3a49'; roundRectPath(orientCtx, -moduleHalf,-moduleHalf,moduleHalf*2,moduleHalf*2,cornerR); orientCtx.fill();
     orientCtx.rotate(moduleAngles[i]);
-    orientCtx.strokeStyle = '#9ecbff'; orientCtx.lineWidth = 2*fac;
+    orientCtx.strokeStyle = '#9ecbff'; orientCtx.lineWidth = moduleHalf * (2 / 16);
     orientCtx.beginPath(); orientCtx.arc(0,0,wheelR,0,Math.PI*2); orientCtx.stroke();
     for(let k=0;k<6;k++){ const ang=k*Math.PI/3; orientCtx.beginPath(); orientCtx.moveTo(0,0); orientCtx.lineTo(wheelR*Math.cos(ang), wheelR*Math.sin(ang)); orientCtx.stroke(); }
-    orientCtx.beginPath(); orientCtx.moveTo(0,0); orientCtx.lineTo(wheelR+10*fac,0); orientCtx.stroke();
+    orientCtx.beginPath(); orientCtx.moveTo(0,0); orientCtx.lineTo(wheelR + Math.min(10*fac, moduleHalf*0.8),0); orientCtx.stroke();
     orientCtx.restore();
   }
   orientCtx.strokeStyle = '#58a6ff'; orientCtx.lineWidth = 2*fac; orientCtx.beginPath(); orientCtx.moveTo(0,0); orientCtx.lineTo(frameL/2,0); orientCtx.stroke();
@@ -258,25 +260,7 @@ function drawRobot(x,y,th,ghost){
   ctx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
   ctx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
 
-  const moduleHalf = 16 * fac;
-  const wheelR = 12 * fac;
-  const corners = [
-    {x:+frameL/2 - moduleHalf, y:-frameW/2 + moduleHalf},
-    {x:+frameL/2 - moduleHalf, y:+frameW/2 - moduleHalf},
-    {x:-frameL/2 + moduleHalf, y:-frameW/2 + moduleHalf},
-    {x:-frameL/2 + moduleHalf, y:+frameW/2 - moduleHalf}
-  ];
-  for (let i=0;i<4;i++){
-    const c = corners[i]; ctx.save(); ctx.translate(c.x, c.y);
-    ctx.fillStyle = ghost ? '#2b3a49aa' : '#2b3a49';
-    roundRectPath(ctx, -16*fac,-16*fac,32*fac,32*fac,6*fac); ctx.fill();
-    ctx.rotate(moduleAngles[i]);
-    ctx.strokeStyle = '#9ecbff'; ctx.lineWidth = 2*fac;
-    ctx.beginPath(); ctx.arc(0,0,wheelR,0,Math.PI*2); ctx.stroke();
-    for(let k=0;k<6;k++){ const ang=k*Math.PI/3; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(wheelR*Math.cos(ang), wheelR*Math.sin(ang)); ctx.stroke(); }
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(wheelR+10*fac,0); ctx.stroke();
-    ctx.restore();
-  }
+  // Wheels are rendered only in the orientation window to reduce clutter.
 
   const numFont = Math.min(bpx * 0.8, 18);
   ctx.fillStyle = '#ffffff';
