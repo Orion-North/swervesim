@@ -286,7 +286,7 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 function spawnPickups(n){ const arr=[]; for(let i=0;i<n;i++){ arr.push({x: 80+Math.random()*(fieldPxW-160), y: 120+Math.random()*(fieldPxH-240), taken:false}); } return arr; }
 function resetCycle(){ pose.x = fieldPxW*0.25; pose.y = fieldPxH*0.75; pose.th = 0; velCmd={vx:0,vy:0,om:0}; velAct={vx:0,vy:0,om:0}; moduleAngles=[0,0,0,0]; carrying=false; pickupTargets=spawnPickups(5); cycleStart=performance.now(); pickupsDone=0; updateHUD(); recording=false; recordBuf=[]; playing=false; }
 function updateHUD(){ const t=(performance.now()-cycleStart)/1000; hud.cycle.textContent = t.toFixed(2)+'s'; hud.pickups.textContent = pickupsDone; hud.spd.textContent = (Math.hypot(velAct.vx, velAct.vy)).toFixed(2); hud.om.textContent = (velAct.om).toFixed(2); }
-function checkPickups(){ if (!carrying){ for(const p of pickupTargets){ if(!p.taken && dist(pose.x, p.y, p.x, p.y) < 34){ p.taken=true; carrying=true; break; } } } else { if (dist(pose.x, pose.y, scoreZone.x, scoreZone.y) < scoreZone.r){ carrying=false; pickupsDone += 1; updateHUD(); } } }
+function checkPickups(){ if (!carrying){ for(const p of pickupTargets){ if(!p.taken && dist(pose.x, pose.y, p.x, p.y) < 34){ p.taken=true; carrying=true; break; } } } else { if (dist(pose.x, pose.y, scoreZone.x, scoreZone.y) < scoreZone.r){ carrying=false; pickupsDone += 1; updateHUD(); } } }
 function openCal(){ ui.calPanel.style.display='block'; }
 function closeCal(){ ui.calPanel.style.display='none'; }
 function applyCal(){
