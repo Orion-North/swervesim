@@ -205,9 +205,12 @@ function drawOrientationWindow(){
   orientCtx.clearRect(0,0,orientCanvas.width, orientCanvas.height);
   orientCtx.save();
   orientCtx.translate(orientCanvas.width/2, orientCanvas.height/2);
-  const scale = 40;
-  const fac = scale / field.pxPerM;
   const track = profile.track_m, wheelbase = profile.wheelbase_m;
+  const outerLm = wheelbase + 2*BUMPER_M;
+  const outerWm = track + 2*BUMPER_M;
+  const maxScale = Math.min(orientCanvas.width, orientCanvas.height) * Math.SQRT2 / (outerLm + outerWm);
+  const scale = maxScale * 0.95;
+  const fac = scale / field.pxPerM;
   const frameW = track * scale, frameL = wheelbase * scale;
   const bpx = BUMPER_M * scale;
   const outerW = frameW + 2*bpx, outerL = frameL + 2*bpx;
