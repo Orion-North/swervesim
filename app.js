@@ -84,11 +84,29 @@ function computeDerivedLimits(){
   hud.freeW.textContent = lim.omAzFree.toFixed(1);
 }
 function pollGamepad(){
-  const gps = navigator.getGamepads?.() || []; const gp = gps[0]; const t = performance.now();
-  if (!gp){ inputQ.push({t, lx:0, ly:0, rx:0, btnY:false, btnA:false}); return; }
-  const lx = db(gp.axes[0] ?? 0, profile.deadband); const ly = db(gp.axes[1] ?? 0, profile.deadband);
-  const rx = db((gp.axes[2] ?? gp.axes[3] ?? 0), profile.deadband);
-  const btnY = !!(gp.buttons[3]?.pressed); const btnA = !!(gp.buttons[0]?.pressed);
+  const gps = navigator.getGamepads?.() || [];
+  const gp = gps[0];
+  const t = performance.now();
+  if (!gp){
+    inputQ.push({t, lx:0, ly:0, rx:0, btnY:false, btnA:false});
+    return;
+  }
+  const lx = db(gp.axes[0] ?? 0, profile.deadband);
+  const ly = db(gp.axes[1] ?? 0, profile.deadband);
+
+  // Different controllers expose the right stick X axis at different indices.
+  // Pick the axis with the greatest magnitude from common locations so the
+  // simulator reacts properly regardless of mapping.
+  const cand = [gp.axes[2], gp.axes[3], gp.axes[4]];
+  let rxRaw = 0;
+  for (const val of cand){
+    const v = val ?? 0;
+    if (Math.abs(v) > Math.abs(rxRaw)) rxRaw = v;
+  }
+  const rx = db(rxRaw, profile.deadband);
+
+  const btnY = !!(gp.buttons[3]?.pressed);
+  const btnA = !!(gp.buttons[0]?.pressed);
   inputQ.push({t, lx, ly, rx, btnY, btnA});
 }
 function consumeInput(){
