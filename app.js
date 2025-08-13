@@ -7,6 +7,8 @@ const g = 9.80665;
 const BUMPER_M = 0.0826;
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+const orientCanvas = document.getElementById('orient');
+const orientCtx = orientCanvas.getContext('2d');
 const hud = {
   mode: document.getElementById('mode'),
   cycle: document.getElementById('cycle'),
@@ -154,6 +156,46 @@ function draw(){
   if (playing && playBuf.length){ const t = performance.now() - playT0; while (playIdx+1 < playBuf.length && (playBuf[playIdx+1].t - playBuf[0].t) <= t) playIdx++; ctx.strokeStyle = '#7b9acc'; ctx.lineWidth = 1.5; ctx.beginPath(); for(let i=1;i<=playIdx;i++){ const a=playBuf[i-1], b=playBuf[i]; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);} ctx.stroke(); const gpt = playBuf[playIdx] || playBuf[playBuf.length - 1]; drawRobot(gpt.x, gpt.y, gpt.th, true); }
   drawRobot(pose.x, pose.y, pose.th, false);
   ctx.restore();
+  drawOrientationWindow();
+}
+function drawOrientationWindow(){
+  orientCtx.clearRect(0,0,orientCanvas.width, orientCanvas.height);
+  orientCtx.save();
+  orientCtx.translate(orientCanvas.width/2, orientCanvas.height/2);
+  const scale = 40;
+  const fac = scale / field.pxPerM;
+  const track = profile.track_m, wheelbase = profile.wheelbase_m;
+  const frameW = track * scale, frameL = wheelbase * scale;
+  const bpx = BUMPER_M * scale;
+  const outerW = frameW + 2*bpx, outerL = frameL + 2*bpx;
+  orientCtx.rotate(pose.th);
+  orientCtx.fillStyle = '#253140';
+  roundRectPath(orientCtx, -frameL/2, -frameW/2, frameL, frameW, 10*fac); orientCtx.fill();
+  orientCtx.fillStyle = '#7c2331';
+  orientCtx.fillRect(-outerL/2, -outerW/2, outerL, bpx);
+  orientCtx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
+  orientCtx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
+  orientCtx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
+  const cornerOffset = 28 * fac;
+  const wheelR = 12 * fac;
+  const corners = [
+    {x:+frameL/2 - cornerOffset, y:-frameW/2 + cornerOffset},
+    {x:+frameL/2 - cornerOffset, y:+frameW/2 - cornerOffset},
+    {x:-frameL/2 + cornerOffset, y:-frameW/2 + cornerOffset},
+    {x:-frameL/2 + cornerOffset, y:+frameW/2 - cornerOffset}
+  ];
+  for (let i=0;i<4;i++){
+    const c = corners[i]; orientCtx.save(); orientCtx.translate(c.x, c.y);
+    orientCtx.fillStyle = '#2b3a49'; roundRectPath(orientCtx, -16*fac,-16*fac,32*fac,32*fac,6*fac); orientCtx.fill();
+    orientCtx.rotate(moduleAngles[i]);
+    orientCtx.strokeStyle = '#9ecbff'; orientCtx.lineWidth = 2*fac;
+    orientCtx.beginPath(); orientCtx.arc(0,0,wheelR,0,Math.PI*2); orientCtx.stroke();
+    for(let k=0;k<6;k++){ const ang=k*Math.PI/3; orientCtx.beginPath(); orientCtx.moveTo(0,0); orientCtx.lineTo(wheelR*Math.cos(ang), wheelR*Math.sin(ang)); orientCtx.stroke(); }
+    orientCtx.beginPath(); orientCtx.moveTo(0,0); orientCtx.lineTo(wheelR+10*fac,0); orientCtx.stroke();
+    orientCtx.restore();
+  }
+  orientCtx.strokeStyle = '#58a6ff'; orientCtx.lineWidth = 2*fac; orientCtx.beginPath(); orientCtx.moveTo(0,0); orientCtx.lineTo(frameL/2,0); orientCtx.stroke();
+  orientCtx.restore();
 }
 function drawRobot(x,y,th,ghost){
   const track = profile.track_m, wheelbase = profile.wheelbase_m;
@@ -162,7 +204,7 @@ function drawRobot(x,y,th,ghost){
   const outerW = frameW + 2*bpx, outerL = frameL + 2*bpx;
   ctx.save(); ctx.translate(x,y); ctx.rotate(th);
   ctx.fillStyle = ghost ? '#253140aa' : '#253140';
-  roundRect(-frameL/2, -frameW/2, frameL, frameW, 10); ctx.fill();
+  roundRectPath(ctx, -frameL/2, -frameW/2, frameL, frameW, 10); ctx.fill();
   ctx.fillStyle = ghost ? '#7c2331aa' : '#7c2331';
   ctx.fillRect(-outerL/2, -outerW/2, outerL, bpx);
   ctx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
@@ -173,18 +215,16 @@ function drawRobot(x,y,th,ghost){
   const wheelR = 12;
   for (let i=0;i<4;i++){
     const c = corners[i]; ctx.save(); ctx.translate(c.x, c.y);
-    ctx.fillStyle = ghost ? '#2b3a49aa' : '#2b3a49'; roundRect(-16,-16,32,32,6); ctx.fill();
+    ctx.fillStyle = ghost ? '#2b3a49aa' : '#2b3a49'; roundRectPath(ctx, -16,-16,32,32,6); ctx.fill();
     ctx.rotate(moduleAngles[i]);
     ctx.strokeStyle = ghost ? '#9fb9d1' : '#9ecbff'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(0,0,wheelR,0,Math.PI*2); ctx.stroke();
     for(let k=0;k<6;k++){ const ang = k*Math.PI/3; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(wheelR*Math.cos(ang), wheelR*Math.sin(ang)); ctx.stroke(); }
-    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(wheelR+10,0); ctx.stroke();
     ctx.restore();
   }
-  ctx.strokeStyle = ghost ? '#6e86a3' : '#58a6ff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(34,0); ctx.stroke();
   ctx.restore();
 }
-function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); }
+function roundRectPath(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); }
 function spawnPickups(n){ const arr=[]; for(let i=0;i<n;i++){ arr.push({x: 80+Math.random()*(fieldPxW-160), y: 120+Math.random()*(fieldPxH-240), taken:false}); } return arr; }
 function resetCycle(){ pose.x = fieldPxW*0.25; pose.y = fieldPxH*0.75; pose.th = 0; velCmd={vx:0,vy:0,om:0}; velAct={vx:0,vy:0,om:0}; moduleAngles=[0,0,0,0]; carrying=false; pickupTargets=spawnPickups(5); cycleStart=performance.now(); pickupsDone=0; updateHUD(); recording=false; recordBuf=[]; playing=false; }
 function updateHUD(){ const t=(performance.now()-cycleStart)/1000; hud.cycle.textContent = t.toFixed(2)+'s'; hud.pickups.textContent = pickupsDone; hud.spd.textContent = (Math.hypot(velAct.vx, velAct.vy)).toFixed(2); hud.om.textContent = (velAct.om).toFixed(2); }
