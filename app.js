@@ -116,7 +116,7 @@ function pollGamepad(){
     inputQ.push({t, lx:0, ly:0, rx:0, btnY:false, btnA:false});
     return;
   }
-  const lx = db(gp.axes[0] ?? 0, profile.deadband);
+  const lx = db(-(gp.axes[0] ?? 0), profile.deadband);
   const ly = db(gp.axes[1] ?? 0, profile.deadband);
 
   // Different controllers expose the right stick X axis at different indices.
