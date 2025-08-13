@@ -34,6 +34,10 @@ const ui = {
   applyCal: document.getElementById('applyCal'),
   closeCal: document.getElementById('closeCal'),
   toast: document.getElementById('toast'),
+  startScreen: document.getElementById('startScreen'),
+  startBtn: document.getElementById('startBtn'),
+  homeBtn: document.getElementById('homeBtn'),
+  bumperSel: document.getElementById('bumperSel'),
 };
 const field = { Wm: 16.54, Hm: 8.21, pxPerM: 50 };
 let fieldPxW = 0, fieldPxH = 0;
@@ -43,6 +47,7 @@ let gearChart = JSON.parse(document.getElementById('gearChart').textContent);
 let profile = null;
 let motor = 'NEO';
 let driveRatio = 5.50;
+let bumperColor = '#7c2331';
 let lim = { vFree: 4.5, Fmax: 0, Iz: 1, omAzFree: 20 };
 let pose = { x:0, y:0, th: 0 };
 let velCmd = { vx:0, vy:0, om:0 };
@@ -58,6 +63,7 @@ let inputQ = []; let lastY=false, lastA=false;
 let recording = false, recordBuf = [];
 let playing = false, playBuf = [], playIdx = 0, playT0 = 0;
 let defenderOn = false, defender = { x:0, y:0, vmax: 3.0, r: 18 };
+let running = false;
 const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
 const db = (v,d)=> Math.abs(v)<d ? 0 : (v - Math.sign(v)*d)/(1-d);
 function rotF(vx,vy,ang){ const c=Math.cos(ang), s=Math.sin(ang); return [c*vx - s*vy, s*vx + c*vy]; }
@@ -266,7 +272,7 @@ function drawRobot(x,y,th,ghost){
   ctx.save(); ctx.translate(x,y); ctx.rotate(th);
   ctx.fillStyle = ghost ? '#253140aa' : '#253140';
   roundRectPath(ctx, -frameL/2, -frameW/2, frameL, frameW, 10*fac); ctx.fill();
-  ctx.fillStyle = ghost ? '#7c2331aa' : '#7c2331';
+  ctx.fillStyle = ghost ? bumperColor + 'aa' : bumperColor;
   ctx.fillRect(-outerL/2, -outerW/2, outerL, bpx);
   ctx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
   ctx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
@@ -339,11 +345,25 @@ ui.profileSel.onchange = (e)=> setProfile(e.target.value);
 ui.motorSel.onchange = (e)=> setMotor(e.target.value);
 ui.ratioSel.onchange = (e)=> setRatio(e.target.value);
 ui.modeSel.onchange = (e)=> setControlMode(e.target.value === 'field');
+ui.startBtn.onclick = ()=> startGame();
+ui.homeBtn.onclick = ()=> returnToStart();
 window.addEventListener('resize', resizeSim);
-function init(){ loadUI(); resizeSim(); resetCycle(); loop(); }
+
+function startGame(){
+  setMotor(ui.motorSel.value);
+  setRatio(ui.ratioSel.value);
+  bumperColor = ui.bumperSel.value === 'blue' ? '#233b7c' : '#7c2331';
+  ui.startScreen.style.display = 'none';
+  init();
+}
+function returnToStart(){
+  running = false;
+  ui.startScreen.style.display = 'flex';
+}
+function init(){ resizeSim(); resetCycle(); last = performance.now(); running = true; loop(); }
 let last = performance.now();
-function loop(){ pollGamepad(); consumeInput(); const now=performance.now(); const dt = Math.min(0.04, (now-last)/1000); last = now; step(dt); draw(); updateHUD(); requestAnimationFrame(loop); }
-init();
+function loop(){ if (!running) return; pollGamepad(); consumeInput(); const now=performance.now(); const dt = Math.min(0.04, (now-last)/1000); last = now; step(dt); draw(); updateHUD(); requestAnimationFrame(loop); }
+loadUI();
 (function(){
   try{
     console.assert(wrapPI(4*Math.PI) === 0, 'wrapPI 4π');
