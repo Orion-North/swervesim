@@ -4,7 +4,7 @@ const MOTOR = {
 };
 const AZ = { total_ratio: 46.42, neo550_free_rpm: 11000 };
 const g = 9.80665;
-const BUMPER_M = 0.0826;
+const BUMPER_M = 0.1524; // 6 in bumpers
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const orientCanvas = document.getElementById('orient');
@@ -36,26 +36,26 @@ const ui = {
   toast: document.getElementById('toast'),
 };
 const field = { Wm: 16.54, Hm: 8.21, pxPerM: 50 };
-let fieldPxW = field.Wm * field.pxPerM, fieldPxH = field.Hm * field.pxPerM;
-const origin = { x:(canvas.width-fieldPxW)/2, y:(canvas.height-fieldPxH)/2 };
+let fieldPxW = 0, fieldPxH = 0;
+const origin = { x:0, y:0 };
 let profiles = JSON.parse(document.getElementById('profiles').textContent);
 let gearChart = JSON.parse(document.getElementById('gearChart').textContent);
 let profile = null;
 let motor = 'NEO';
 let driveRatio = 5.50;
 let lim = { vFree: 4.5, Fmax: 0, Iz: 1, omAzFree: 20 };
-let pose = { x: fieldPxW*0.5, y: fieldPxH*0.5, th: 0 };
+let pose = { x:0, y:0, th: 0 };
 let velCmd = { vx:0, vy:0, om:0 };
 let velAct = { vx:0, vy:0, om:0 };
 let fieldCentric = true;
 let moduleAngles = [0,0,0,0];
-let pickupTargets = spawnPickups(5);
-let carrying = false, scoreZone = { x: fieldPxW-140, y: 60, r: 50 };
+let pickupTargets = [];
+let carrying = false, scoreZone = { x:0, y:0, r:0 };
 let pickupsDone = 0, cycleStart = performance.now();
 let inputQ = []; let lastY=false, lastA=false;
 let recording = false, recordBuf = [];
 let playing = false, playBuf = [], playIdx = 0, playT0 = 0;
-let defenderOn = false, defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax: 3.0, r: 18 };
+let defenderOn = false, defender = { x:0, y:0, vmax: 3.0, r: 18 };
 const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
 const db = (v,d)=> Math.abs(v)<d ? 0 : (v - Math.sign(v)*d)/(1-d);
 function rotF(vx,vy,ang){ const c=Math.cos(ang), s=Math.sin(ang); return [c*vx - s*vy, s*vx + c*vy]; }
@@ -89,6 +89,24 @@ function computeDerivedLimits(){
   const omMotor = (AZ.neo550_free_rpm * 2*Math.PI) / 60; lim.omAzFree = (omMotor / AZ.total_ratio);
   hud.freeV.textContent = lim.vFree.toFixed(2);
   hud.freeW.textContent = lim.omAzFree.toFixed(1);
+}
+
+function resizeSim(){
+  const rect = canvas.getBoundingClientRect();
+  const prev = field.pxPerM;
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  const newPxPerM = Math.min(rect.width/field.Wm, rect.height/field.Hm);
+  const scale = prev ? newPxPerM / prev : 1;
+  field.pxPerM = newPxPerM;
+  fieldPxW = field.Wm * field.pxPerM;
+  fieldPxH = field.Hm * field.pxPerM;
+  origin.x = (canvas.width - fieldPxW) / 2;
+  origin.y = (canvas.height - fieldPxH) / 2;
+  pose.x *= scale; pose.y *= scale;
+  pickupTargets.forEach(p=>{ p.x *= scale; p.y *= scale; });
+  scoreZone.x *= scale; scoreZone.y *= scale; scoreZone.r *= scale;
+  defender.x *= scale; defender.y *= scale; defender.r *= scale;
 }
 function pollGamepad(){
   const gps = navigator.getGamepads?.() || [];
@@ -227,16 +245,39 @@ function drawRobot(x,y,th,ghost){
   const frameW = track * field.pxPerM, frameL = wheelbase * field.pxPerM;
   const bpx = BUMPER_M * field.pxPerM;
   const outerW = frameW + 2*bpx, outerL = frameL + 2*bpx;
+  const fac = field.pxPerM / 50;
   ctx.save(); ctx.translate(x,y); ctx.rotate(th);
   ctx.fillStyle = ghost ? '#253140aa' : '#253140';
-  roundRectPath(ctx, -frameL/2, -frameW/2, frameL, frameW, 10); ctx.fill();
+  roundRectPath(ctx, -frameL/2, -frameW/2, frameL, frameW, 10*fac); ctx.fill();
   ctx.fillStyle = ghost ? '#7c2331aa' : '#7c2331';
   ctx.fillRect(-outerL/2, -outerW/2, outerL, bpx);
   ctx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
   ctx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
   ctx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
+
+  const moduleHalf = 16 * fac;
+  const wheelR = 12 * fac;
+  const corners = [
+    {x:+frameL/2 - moduleHalf, y:-frameW/2 + moduleHalf},
+    {x:+frameL/2 - moduleHalf, y:+frameW/2 - moduleHalf},
+    {x:-frameL/2 + moduleHalf, y:-frameW/2 + moduleHalf},
+    {x:-frameL/2 + moduleHalf, y:+frameW/2 - moduleHalf}
+  ];
+  for (let i=0;i<4;i++){
+    const c = corners[i]; ctx.save(); ctx.translate(c.x, c.y);
+    ctx.fillStyle = ghost ? '#2b3a49aa' : '#2b3a49';
+    roundRectPath(ctx, -16*fac,-16*fac,32*fac,32*fac,6*fac); ctx.fill();
+    ctx.rotate(moduleAngles[i]);
+    ctx.strokeStyle = '#9ecbff'; ctx.lineWidth = 2*fac;
+    ctx.beginPath(); ctx.arc(0,0,wheelR,0,Math.PI*2); ctx.stroke();
+    for(let k=0;k<6;k++){ const ang=k*Math.PI/3; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(wheelR*Math.cos(ang), wheelR*Math.sin(ang)); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(wheelR+10*fac,0); ctx.stroke();
+    ctx.restore();
+  }
+
+  const numFont = Math.min(bpx * 0.8, 18);
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px system-ui';
+  ctx.font = `bold ${numFont}px system-ui`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const numOffset = outerW/2 - bpx/2;
@@ -246,7 +287,17 @@ function drawRobot(x,y,th,ghost){
 }
 function roundRectPath(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); }
 function spawnPickups(n){ const arr=[]; for(let i=0;i<n;i++){ arr.push({x: 80+Math.random()*(fieldPxW-160), y: 120+Math.random()*(fieldPxH-240), taken:false}); } return arr; }
-function resetCycle(){ pose.x = fieldPxW*0.25; pose.y = fieldPxH*0.75; pose.th = 0; velCmd={vx:0,vy:0,om:0}; velAct={vx:0,vy:0,om:0}; moduleAngles=[0,0,0,0]; carrying=false; pickupTargets=spawnPickups(5); cycleStart=performance.now(); pickupsDone=0; updateHUD(); recording=false; recordBuf=[]; playing=false; }
+function resetCycle(){
+  pose.x = fieldPxW*0.25; pose.y = fieldPxH*0.75; pose.th = 0;
+  velCmd={vx:0,vy:0,om:0}; velAct={vx:0,vy:0,om:0};
+  moduleAngles=[0,0,0,0];
+  carrying=false;
+  pickupTargets=spawnPickups(5);
+  scoreZone = { x: fieldPxW-140, y: 60, r: 50 };
+  defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, r:18 };
+  cycleStart=performance.now(); pickupsDone=0; updateHUD();
+  recording=false; recordBuf=[]; playing=false;
+}
 function updateHUD(){ const t=(performance.now()-cycleStart)/1000; hud.cycle.textContent = t.toFixed(2)+'s'; hud.pickups.textContent = pickupsDone; hud.spd.textContent = (Math.hypot(velAct.vx, velAct.vy)).toFixed(2); hud.om.textContent = (velAct.om).toFixed(2); }
 function checkPickups(){ if (!carrying){ for(const p of pickupTargets){ if(!p.taken && dist(pose.x, pose.y, p.x, p.y) < 34){ p.taken=true; carrying=true; break; } } } else { if (dist(pose.x, pose.y, scoreZone.x, scoreZone.y) < scoreZone.r){ carrying=false; pickupsDone += 1; updateHUD(); } } }
 function openCal(){ ui.calPanel.style.display='block'; }
@@ -267,7 +318,8 @@ ui.profileSel.onchange = (e)=> setProfile(e.target.value);
 ui.motorSel.onchange = (e)=> setMotor(e.target.value);
 ui.ratioSel.onchange = (e)=> setRatio(e.target.value);
 ui.modeSel.onchange = (e)=> setControlMode(e.target.value === 'field');
-function init(){ loadUI(); resetCycle(); loop(); }
+window.addEventListener('resize', resizeSim);
+function init(){ loadUI(); resizeSim(); resetCycle(); loop(); }
 let last = performance.now();
 function loop(){ pollGamepad(); consumeInput(); const now=performance.now(); const dt = Math.min(0.04, (now-last)/1000); last = now; step(dt); draw(); updateHUD(); requestAnimationFrame(loop); }
 init();
