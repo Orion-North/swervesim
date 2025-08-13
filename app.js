@@ -143,8 +143,8 @@ function consumeInput(){
   lastY = inp.btnY;
   if (inp.btnA && !lastA){ resetCycle(); }
   lastA = inp.btnA;
-  let vx = -inp.ly * lim.vFree;
-  let vy =  inp.lx * lim.vFree;
+  let vx =  inp.lx * lim.vFree;
+  let vy = -inp.ly * lim.vFree;
   let om =  inp.rx * (lim.vFree / (Math.hypot(profile.wheelbase_m, profile.track_m)/2));
   if (!fieldCentric){ [vx, vy] = rotF(vx, vy, pose.th); }
   velCmd.vx = vx; velCmd.vy = vy; velCmd.om = om;
