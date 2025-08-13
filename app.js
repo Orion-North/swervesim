@@ -234,7 +234,7 @@ function drawOrientationWindow(){
   orientCtx.rotate(pose.th);
   orientCtx.fillStyle = '#253140';
   roundRectPath(orientCtx, -frameL/2, -frameW/2, frameL, frameW, 10*fac); orientCtx.fill();
-  orientCtx.fillStyle = '#7c2331';
+  orientCtx.fillStyle = bumperColor;
   orientCtx.fillRect(-outerL/2, -outerW/2, outerL, bpx);
   orientCtx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
   orientCtx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
