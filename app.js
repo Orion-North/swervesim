@@ -39,6 +39,7 @@ const ui = {
   homeBtn: document.getElementById('homeBtn'),
   bumperSel: document.getElementById('bumperSel'),
   layoutSel: document.getElementById('layoutSel'),
+  teamNum: document.getElementById('teamNum'),
 };
 const field = { Wm: 16.54, Hm: 8.21, pxPerM: 50 };
 let fieldPxW = 0, fieldPxH = 0;
@@ -49,6 +50,8 @@ let profile = null;
 let motor = 'NEO';
 let driveRatio = 5.50;
 let bumperColor = '#7c2331';
+let defenderColor = '#233b7c';
+let teamNumber = '7190';
 let lim = { vFree: 4.5, Fmax: 0, Iz: 1, omAzFree: 20 };
 let pose = { x:0, y:0, th: 0 };
 let velCmd = { vx:0, vy:0, om:0 };
@@ -65,7 +68,7 @@ let pickupsDone = 0, cycleStart = performance.now();
 let inputQ = []; let lastY=false, lastA=false;
 let recording = false, recordBuf = [];
 let playing = false, playBuf = [], playIdx = 0, playT0 = 0;
-let defenderOn = false, defender = { x:0, y:0, vmax: 3.0, r: 18 };
+let defenderOn = false, defender = { x:0, y:0, vmax: 3.0 };
 let running = false;
 const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
 const db = (v,d)=> Math.abs(v)<d ? 0 : (v - Math.sign(v)*d)/(1-d);
@@ -125,7 +128,7 @@ function resizeSim(){
   goal.x *= scale; goal.y *= scale; goal.r *= scale; goal.w *= scale; goal.h *= scale;
   ball.x *= scale; ball.y *= scale; ball.r *= scale;
   obstacles.forEach(o=>{ o.x *= scale; o.y *= scale; o.r *= scale; });
-  defender.x *= scale; defender.y *= scale; defender.r *= scale;
+  defender.x *= scale; defender.y *= scale;
 }
 
 const layouts = {
@@ -133,58 +136,58 @@ const layouts = {
     station = { x: 60, y: fieldPxH - 60, r: 40 };
     goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [
-      { x: fieldPxW*0.4, y: fieldPxH*0.4, r: 40 },
-      { x: fieldPxW*0.6, y: fieldPxH*0.5, r: 50 },
-      { x: fieldPxW*0.3, y: fieldPxH*0.7, r: 35 }
+      { x: fieldPxW*0.4, y: fieldPxH*0.4, r: field.pxPerM*0.8 },
+      { x: fieldPxW*0.6, y: fieldPxH*0.5, r: field.pxPerM*1.0 },
+      { x: fieldPxW*0.3, y: fieldPxH*0.7, r: field.pxPerM*0.7 }
     ];
-    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, r:18 };
+    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0 };
   },
   clear(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
     goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [];
-    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, r:18 };
+    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0 };
   },
   obstacle(){
     station = { x: fieldPxW*0.25, y: fieldPxH - 60, r: 40 };
     goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [
-      { x: fieldPxW*0.5, y: fieldPxH*0.4, r: 60 },
-      { x: fieldPxW*0.3, y: fieldPxH*0.6, r: 40 },
-      { x: fieldPxW*0.7, y: fieldPxH*0.7, r: 30 }
+      { x: fieldPxW*0.5, y: fieldPxH*0.4, r: field.pxPerM*1.2 },
+      { x: fieldPxW*0.3, y: fieldPxH*0.6, r: field.pxPerM*0.8 },
+      { x: fieldPxW*0.7, y: fieldPxH*0.7, r: field.pxPerM*0.6 }
     ];
-    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, r:18 };
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0 };
   },
   slalom(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
     goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [
-      { x: fieldPxW*0.3, y: fieldPxH*0.5, r: 40 },
-      { x: fieldPxW*0.5, y: fieldPxH*0.3, r: 40 },
-      { x: fieldPxW*0.7, y: fieldPxH*0.5, r: 40 }
+      { x: fieldPxW*0.3, y: fieldPxH*0.5, r: field.pxPerM*0.8 },
+      { x: fieldPxW*0.5, y: fieldPxH*0.3, r: field.pxPerM*0.8 },
+      { x: fieldPxW*0.7, y: fieldPxH*0.5, r: field.pxPerM*0.8 }
     ];
-    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, r:18 };
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0 };
   },
   gauntlet(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
     goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [
-      { x: fieldPxW*0.4, y: fieldPxH*0.6, r: 30 },
-      { x: fieldPxW*0.5, y: fieldPxH*0.4, r: 30 },
-      { x: fieldPxW*0.6, y: fieldPxH*0.6, r: 30 },
-      { x: fieldPxW*0.7, y: fieldPxH*0.4, r: 30 }
+      { x: fieldPxW*0.4, y: fieldPxH*0.6, r: field.pxPerM*0.6 },
+      { x: fieldPxW*0.5, y: fieldPxH*0.4, r: field.pxPerM*0.6 },
+      { x: fieldPxW*0.6, y: fieldPxH*0.6, r: field.pxPerM*0.6 },
+      { x: fieldPxW*0.7, y: fieldPxH*0.4, r: field.pxPerM*0.6 }
     ];
-    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, r:18 };
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0 };
   },
   cluster(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
     goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [
-      { x: fieldPxW*0.5, y: fieldPxH*0.5, r: 60 },
-      { x: fieldPxW*0.35, y: fieldPxH*0.4, r: 30 },
-      { x: fieldPxW*0.65, y: fieldPxH*0.6, r: 30 }
+      { x: fieldPxW*0.5, y: fieldPxH*0.5, r: field.pxPerM*1.2 },
+      { x: fieldPxW*0.35, y: fieldPxH*0.4, r: field.pxPerM*0.6 },
+      { x: fieldPxW*0.65, y: fieldPxH*0.6, r: field.pxPerM*0.6 }
     ];
-    defender = { x: fieldPxW*0.55, y: fieldPxH*0.55, vmax:3.0, r:18 };
+    defender = { x: fieldPxW*0.55, y: fieldPxH*0.55, vmax:3.0 };
   }
 };
 function pollGamepad(){
@@ -270,7 +273,19 @@ function step(dt){
     const minD = o.r + robotR;
     if (d < minD){ const s = minD / d; pose.x = o.x + dx * s; pose.y = o.y + dy * s; }
   }
-  if (defenderOn){ const dx=pose.x-defender.x, dy=pose.y-defender.y, d=Math.hypot(dx,dy)||1e-6; const vmax=defender.vmax*field.pxPerM; defender.x+=dx/d*vmax*dt; defender.y+=dy/d*vmax*dt; }
+  if (defenderOn){
+    const dx=pose.x-defender.x, dy=pose.y-defender.y, d=Math.hypot(dx,dy)||1e-6;
+    const vmax=defender.vmax*field.pxPerM;
+    defender.x+=dx/d*vmax*dt; defender.y+=dy/d*vmax*dt;
+    defender.x = clamp(defender.x, 60, fieldPxW-60);
+    defender.y = clamp(defender.y, 60, fieldPxH-60);
+    for (const o of obstacles){
+      const ddx = defender.x - o.x, ddy = defender.y - o.y;
+      const dist2 = Math.hypot(ddx, ddy) || 1e-6;
+      const minD = o.r + robotR;
+      if (dist2 < minD){ const s = minD / dist2; defender.x = o.x + ddx * s; defender.y = o.y + ddy * s; }
+    }
+  }
   checkPickups(); if (recording){ recordBuf.push({t:performance.now(), x:pose.x, y:pose.y, th:pose.th}); }
 }
 function wrapPI(a){ while(a> Math.PI) a-=2*Math.PI; while(a<-Math.PI) a+=2*Math.PI; return a; }
@@ -282,7 +297,7 @@ function draw(){
   if (!carrying){ ctx.fillStyle = '#ffb703'; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill(); }
   ctx.fillStyle = '#e5534b'; ctx.fillRect(goal.x - goal.w/2, goal.y - goal.h/2, goal.w, goal.h);
   ctx.fillStyle = '#555555'; for (const o of obstacles){ ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill(); }
-  if (defenderOn){ ctx.fillStyle = '#b54747'; ctx.beginPath(); ctx.arc(defender.x, defender.y, defender.r, 0, Math.PI*2); ctx.fill(); }
+  if (defenderOn){ const th = Math.atan2(pose.y - defender.y, pose.x - defender.x); drawRobot(defender.x, defender.y, th, false, defenderColor, false, ''); }
   if (playing && playBuf.length){ const t = performance.now() - playT0; while (playIdx+1 < playBuf.length && (playBuf[playIdx+1].t - playBuf[0].t) <= t) playIdx++; ctx.strokeStyle = '#7b9acc'; ctx.lineWidth = 1.5; ctx.beginPath(); for(let i=1;i<=playIdx;i++){ const a=playBuf[i-1], b=playBuf[i]; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);} ctx.stroke(); const gpt = playBuf[playIdx] || playBuf[playBuf.length - 1]; drawRobot(gpt.x, gpt.y, gpt.th, true); }
   drawRobot(pose.x, pose.y, pose.th, false);
   if (carrying){ const p = ballPosOnRobot(); ctx.fillStyle = '#ffb703'; ctx.beginPath(); ctx.arc(p.x, p.y, ball.r, 0, Math.PI*2); ctx.fill(); }
@@ -334,7 +349,7 @@ function drawOrientationWindow(){
   orientCtx.strokeStyle = '#58a6ff'; orientCtx.lineWidth = 2*fac; orientCtx.beginPath(); orientCtx.moveTo(0,0); orientCtx.lineTo(frameL/2,0); orientCtx.stroke();
   orientCtx.restore();
 }
-function drawRobot(x,y,th,ghost){
+function drawRobot(x,y,th,ghost,color=bumperColor,drawIntake=true,num=teamNumber){
   const track = profile.track_m, wheelbase = profile.wheelbase_m;
   const frameW = track * field.pxPerM, frameL = wheelbase * field.pxPerM;
   const bpx = BUMPER_M * field.pxPerM;
@@ -343,23 +358,27 @@ function drawRobot(x,y,th,ghost){
   ctx.save(); ctx.translate(x,y); ctx.rotate(th);
   ctx.fillStyle = ghost ? '#253140aa' : '#253140';
   roundRectPath(ctx, -frameL/2, -frameW/2, frameL, frameW, 10*fac); ctx.fill();
-  ctx.fillStyle = ghost ? bumperColor + 'aa' : bumperColor;
+  ctx.fillStyle = ghost ? color + 'aa' : color;
   ctx.fillRect(-outerL/2, -outerW/2, outerL, bpx);
   ctx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
   ctx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
-  ctx.fillStyle = ghost ? '#00aa00aa' : '#00aa00';
-  ctx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
+  if (drawIntake){
+    ctx.fillStyle = ghost ? '#00aa00aa' : '#00aa00';
+    ctx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
+  }
 
   // Wheels are rendered only in the orientation window to reduce clutter.
 
   const numFont = Math.min(bpx * 0.8, 18);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${numFont}px system-ui`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const numOffset = outerW/2 - bpx/2;
-  ctx.save(); ctx.translate(0, -numOffset); ctx.fillText('7190', 0, 0); ctx.restore();
-  ctx.save(); ctx.rotate(Math.PI); ctx.translate(0, -numOffset); ctx.fillText('7190', 0, 0); ctx.restore();
+  if (num){
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${numFont}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const numOffset = outerW/2 - bpx/2;
+    ctx.save(); ctx.translate(0, -numOffset); ctx.fillText(num, 0, 0); ctx.restore();
+    ctx.save(); ctx.rotate(Math.PI); ctx.translate(0, -numOffset); ctx.fillText(num, 0, 0); ctx.restore();
+  }
   ctx.restore();
 }
 
@@ -434,6 +453,8 @@ function startGame(){
   setMotor(ui.motorSel.value);
   setRatio(ui.ratioSel.value);
   bumperColor = ui.bumperSel.value === 'blue' ? '#233b7c' : '#7c2331';
+  defenderColor = ui.bumperSel.value === 'blue' ? '#7c2331' : '#233b7c';
+  teamNumber = ui.teamNum.value.trim() || '7190';
   layoutKey = ui.layoutSel.value;
   ui.startScreen.style.display = 'none';
   init();
