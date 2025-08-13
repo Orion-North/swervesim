@@ -22,6 +22,7 @@ const ui = {
   motorSel: document.getElementById('motorSel'),
   ratioSel: document.getElementById('ratioSel'),
   profileSel: document.getElementById('profileSel'),
+  modeSel: document.getElementById('modeSel'),
   calBtn: document.getElementById('calBtn'),
   defBtn: document.getElementById('defBtn'),
   recBtn: document.getElementById('recBtn'),
@@ -70,10 +71,16 @@ function loadUI(){
   setProfile(ui.profileSel.value);
   setMotor(ui.motorSel.value);
   setRatio(ui.ratioSel.value);
+  setControlMode(true);
 }
 function setProfile(key){ profile = JSON.parse(JSON.stringify(profiles[key])); computeDerivedLimits(); resetCycle(); toast(`Profile: ${profile.name}`); }
 function setMotor(m){ motor = m; computeDerivedLimits(); }
 function setRatio(r){ driveRatio = parseFloat(r); computeDerivedLimits(); }
+function setControlMode(fc){
+  fieldCentric = fc;
+  hud.mode.textContent = fieldCentric ? 'Field-centric' : 'Robot-centric';
+  if (ui.modeSel) ui.modeSel.value = fieldCentric ? 'field' : 'robot';
+}
 function computeDerivedLimits(){
   const chart = gearChart[driveRatio.toFixed(2)];
   lim.vFree = chart ? chart[motor] : 4.5;
@@ -114,7 +121,7 @@ function consumeInput(){
   const latency = (profile.latency_ms||0) + (profile.jitter_ms? (Math.random()*profile.jitter_ms - profile.jitter_ms/2) : 0);
   let inp = null; while (inputQ.length && now - inputQ[0].t >= latency) { inp = inputQ.shift(); }
   if (!inp && inputQ.length) inp = inputQ[0]; if (!inp) inp = {lx:0, ly:0, rx:0, btnY:false, btnA:false};
-  if (inp.btnY && !lastY){ fieldCentric = !fieldCentric; hud.mode.textContent = fieldCentric ? 'Field-centric' : 'Robot-centric'; }
+  if (inp.btnY && !lastY){ setControlMode(!fieldCentric); }
   lastY = inp.btnY;
   if (inp.btnA && !lastA){ resetCycle(); }
   lastA = inp.btnA;
@@ -228,18 +235,16 @@ function drawRobot(x,y,th,ghost){
   ctx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
   ctx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
   ctx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
-  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 18px system-ui'; ctx.textAlign='center'; ctx.fillText('7190', 0, outerW/2 + 14);
-  const corners = [ {x:+frameL/2 - 28, y:-frameW/2 + 28}, {x:+frameL/2 - 28, y:+frameW/2 - 28}, {x:-frameL/2 + 28, y:-frameW/2 + 28}, {x:-frameL/2 + 28, y:+frameW/2 - 28} ];
-  const wheelR = 12;
-  for (let i=0;i<4;i++){
-    const c = corners[i]; ctx.save(); ctx.translate(c.x, c.y);
-    ctx.fillStyle = ghost ? '#2b3a49aa' : '#2b3a49'; roundRectPath(ctx, -16,-16,32,32,6); ctx.fill();
-    ctx.rotate(moduleAngles[i]);
-    ctx.strokeStyle = ghost ? '#9fb9d1' : '#9ecbff'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(0,0,wheelR,0,Math.PI*2); ctx.stroke();
-    for(let k=0;k<6;k++){ const ang = k*Math.PI/3; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(wheelR*Math.cos(ang), wheelR*Math.sin(ang)); ctx.stroke(); }
-    ctx.restore();
-  }
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 18px system-ui';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const numOffsetW = outerW/2 - bpx/2;
+  const numOffsetL = outerL/2 - bpx/2;
+  ctx.save(); ctx.translate(0, -numOffsetW); ctx.fillText('7190', 0, 0); ctx.restore();
+  ctx.save(); ctx.rotate(Math.PI); ctx.translate(0, -numOffsetW); ctx.fillText('7190', 0, 0); ctx.restore();
+  ctx.save(); ctx.rotate(-Math.PI/2); ctx.translate(0, -numOffsetL); ctx.fillText('7190', 0, 0); ctx.restore();
+  ctx.save(); ctx.rotate(Math.PI/2); ctx.translate(0, -numOffsetL); ctx.fillText('7190', 0, 0); ctx.restore();
   ctx.restore();
 }
 function roundRectPath(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); }
@@ -264,6 +269,7 @@ ui.playBtn.onclick = ()=> { const data = localStorage.getItem('swerve_ghost'); i
 ui.profileSel.onchange = (e)=> setProfile(e.target.value);
 ui.motorSel.onchange = (e)=> setMotor(e.target.value);
 ui.ratioSel.onchange = (e)=> setRatio(e.target.value);
+ui.modeSel.onchange = (e)=> setControlMode(e.target.value === 'field');
 function init(){ loadUI(); resetCycle(); loop(); }
 let last = performance.now();
 function loop(){ pollGamepad(); consumeInput(); const now=performance.now(); const dt = Math.min(0.04, (now-last)/1000); last = now; step(dt); draw(); updateHUD(); requestAnimationFrame(loop); }
