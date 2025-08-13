@@ -38,6 +38,7 @@ const ui = {
   startBtn: document.getElementById('startBtn'),
   homeBtn: document.getElementById('homeBtn'),
   bumperSel: document.getElementById('bumperSel'),
+  layoutSel: document.getElementById('layoutSel'),
 };
 const field = { Wm: 16.54, Hm: 8.21, pxPerM: 50 };
 let fieldPxW = 0, fieldPxH = 0;
@@ -56,7 +57,9 @@ let fieldCentric = true;
 let moduleAngles = [0,0,0,0];
 let carrying = false;
 let station = { x:0, y:0, r:0 };
-let goal = { x:0, y:0, r:0 };
+let goal = { x:0, y:0, r:0, w:0, h:0 };
+let ball = { x:0, y:0, r:0 };
+let layoutKey = 'default';
 let obstacles = [];
 let pickupsDone = 0, cycleStart = performance.now();
 let inputQ = []; let lastY=false, lastA=false;
@@ -113,10 +116,40 @@ function resizeSim(){
   origin.y = (canvas.height - fieldPxH) / 2;
   pose.x *= scale; pose.y *= scale;
   station.x *= scale; station.y *= scale; station.r *= scale;
-  goal.x *= scale; goal.y *= scale; goal.r *= scale;
+  goal.x *= scale; goal.y *= scale; goal.r *= scale; goal.w *= scale; goal.h *= scale;
+  ball.x *= scale; ball.y *= scale; ball.r *= scale;
   obstacles.forEach(o=>{ o.x *= scale; o.y *= scale; o.r *= scale; });
   defender.x *= scale; defender.y *= scale; defender.r *= scale;
 }
+
+const layouts = {
+  default(){
+    station = { x: 60, y: fieldPxH - 60, r: 40 };
+    goal = { x: fieldPxW - 10, y: 20, r: 40, w: 20, h: 40 };
+    obstacles = [
+      { x: fieldPxW*0.4, y: fieldPxH*0.4, r: 40 },
+      { x: fieldPxW*0.6, y: fieldPxH*0.5, r: 50 },
+      { x: fieldPxW*0.3, y: fieldPxH*0.7, r: 35 }
+    ];
+    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, r:18 };
+  },
+  clear(){
+    station = { x: 60, y: fieldPxH - 60, r: 40 };
+    goal = { x: fieldPxW - 10, y: 20, r: 40, w: 20, h: 40 };
+    obstacles = [];
+    defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, r:18 };
+  },
+  obstacle(){
+    station = { x: fieldPxW*0.25, y: fieldPxH - 60, r: 40 };
+    goal = { x: fieldPxW - 10, y: 20, r: 40, w: 20, h: 40 };
+    obstacles = [
+      { x: fieldPxW*0.5, y: fieldPxH*0.4, r: 60 },
+      { x: fieldPxW*0.3, y: fieldPxH*0.6, r: 40 },
+      { x: fieldPxW*0.7, y: fieldPxH*0.7, r: 30 }
+    ];
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, r:18 };
+  }
+};
 function pollGamepad(){
   const gps = navigator.getGamepads?.() || [];
   const gp = gps[0];
@@ -209,12 +242,13 @@ function draw(){
   ctx.fillStyle = '#111820'; ctx.fillRect(0,0,fieldPxW, fieldPxH);
   ctx.strokeStyle = '#1f2a36'; ctx.lineWidth = 2; ctx.strokeRect(0,0,fieldPxW, fieldPxH);
   ctx.strokeStyle = '#172432'; ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(fieldPxW/2,0); ctx.lineTo(fieldPxW/2,fieldPxH); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#2b6cb0'; ctx.beginPath(); ctx.arc(station.x, station.y, station.r, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#e5534b'; ctx.beginPath(); ctx.arc(goal.x, goal.y, goal.r, 0, Math.PI*2); ctx.fill();
+  if (!carrying){ ctx.fillStyle = '#ffb703'; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill(); }
+  ctx.fillStyle = '#e5534b'; ctx.fillRect(goal.x - goal.w/2, goal.y - goal.h/2, goal.w, goal.h);
   ctx.fillStyle = '#555555'; for (const o of obstacles){ ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill(); }
   if (defenderOn){ ctx.fillStyle = '#b54747'; ctx.beginPath(); ctx.arc(defender.x, defender.y, defender.r, 0, Math.PI*2); ctx.fill(); }
   if (playing && playBuf.length){ const t = performance.now() - playT0; while (playIdx+1 < playBuf.length && (playBuf[playIdx+1].t - playBuf[0].t) <= t) playIdx++; ctx.strokeStyle = '#7b9acc'; ctx.lineWidth = 1.5; ctx.beginPath(); for(let i=1;i<=playIdx;i++){ const a=playBuf[i-1], b=playBuf[i]; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);} ctx.stroke(); const gpt = playBuf[playIdx] || playBuf[playBuf.length - 1]; drawRobot(gpt.x, gpt.y, gpt.th, true); }
   drawRobot(pose.x, pose.y, pose.th, false);
+  if (carrying){ const p = ballPosOnRobot(); ctx.fillStyle = '#ffb703'; ctx.beginPath(); ctx.arc(p.x, p.y, ball.r, 0, Math.PI*2); ctx.fill(); }
   ctx.restore();
   drawOrientationWindow();
 }
@@ -291,20 +325,24 @@ function drawRobot(x,y,th,ghost){
   ctx.save(); ctx.rotate(Math.PI); ctx.translate(0, -numOffset); ctx.fillText('7190', 0, 0); ctx.restore();
   ctx.restore();
 }
+
+function ballPosOnRobot(){
+  const track = profile.track_m, wheelbase = profile.wheelbase_m;
+  const frameL = wheelbase * field.pxPerM;
+  const bpx = BUMPER_M * field.pxPerM;
+  const outerL = frameL + 2*bpx;
+  const offset = outerL/2 + ball.r;
+  const ang = pose.th + Math.PI;
+  return { x: pose.x + Math.cos(ang) * offset, y: pose.y + Math.sin(ang) * offset };
+}
 function roundRectPath(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); }
 function resetCycle(){
   pose.x = fieldPxW*0.25; pose.y = fieldPxH*0.75; pose.th = 0;
   velCmd={vx:0,vy:0,om:0}; velAct={vx:0,vy:0,om:0};
   moduleAngles=[0,0,0,0];
   carrying=false;
-  station = { x: 60, y: fieldPxH - 60, r: 40 };
-  goal = { x: fieldPxW - 60, y: 60, r: 40 };
-  obstacles = [
-    { x: fieldPxW*0.4, y: fieldPxH*0.4, r: 40 },
-    { x: fieldPxW*0.6, y: fieldPxH*0.5, r: 50 },
-    { x: fieldPxW*0.3, y: fieldPxH*0.7, r: 35 }
-  ];
-  defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, r:18 };
+  layouts[layoutKey] && layouts[layoutKey]();
+  ball = { x: station.x, y: station.y, r: 15 };
   cycleStart=performance.now(); pickupsDone=0; updateHUD();
   recording=false; recordBuf=[]; playing=false;
 }
@@ -312,8 +350,8 @@ function updateHUD(){ const t=(performance.now()-cycleStart)/1000; hud.cycle.tex
 function checkPickups(){
   const intakeAng = wrapPI(pose.th + Math.PI);
   if (!carrying){
-    const d = dist(pose.x, pose.y, station.x, station.y);
-    const ang = Math.atan2(station.y - pose.y, station.x - pose.x);
+    const d = dist(pose.x, pose.y, ball.x, ball.y);
+    const ang = Math.atan2(ball.y - pose.y, ball.x - pose.x);
     if (d < station.r && Math.abs(wrapPI(intakeAng - ang)) < Math.PI/4){
       carrying = true;
     }
@@ -322,6 +360,7 @@ function checkPickups(){
     const ang = Math.atan2(goal.y - pose.y, goal.x - pose.x);
     if (d < goal.r && Math.abs(wrapPI(intakeAng - ang)) < Math.PI/4){
       carrying = false;
+      ball.x = station.x; ball.y = station.y;
       pickupsDone += 1;
       updateHUD();
     }
@@ -353,6 +392,7 @@ function startGame(){
   setMotor(ui.motorSel.value);
   setRatio(ui.ratioSel.value);
   bumperColor = ui.bumperSel.value === 'blue' ? '#233b7c' : '#7c2331';
+  layoutKey = ui.layoutSel.value;
   ui.startScreen.style.display = 'none';
   init();
 }
