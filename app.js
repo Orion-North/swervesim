@@ -49,8 +49,10 @@ let velCmd = { vx:0, vy:0, om:0 };
 let velAct = { vx:0, vy:0, om:0 };
 let fieldCentric = true;
 let moduleAngles = [0,0,0,0];
-let pickupTargets = [];
-let carrying = false, scoreZone = { x:0, y:0, r:0 };
+let carrying = false;
+let station = { x:0, y:0, r:0 };
+let goal = { x:0, y:0, r:0 };
+let obstacles = [];
 let pickupsDone = 0, cycleStart = performance.now();
 let inputQ = []; let lastY=false, lastA=false;
 let recording = false, recordBuf = [];
@@ -104,8 +106,9 @@ function resizeSim(){
   origin.x = (canvas.width - fieldPxW) / 2;
   origin.y = (canvas.height - fieldPxH) / 2;
   pose.x *= scale; pose.y *= scale;
-  pickupTargets.forEach(p=>{ p.x *= scale; p.y *= scale; });
-  scoreZone.x *= scale; scoreZone.y *= scale; scoreZone.r *= scale;
+  station.x *= scale; station.y *= scale; station.r *= scale;
+  goal.x *= scale; goal.y *= scale; goal.r *= scale;
+  obstacles.forEach(o=>{ o.x *= scale; o.y *= scale; o.r *= scale; });
   defender.x *= scale; defender.y *= scale; defender.r *= scale;
 }
 function pollGamepad(){
@@ -184,6 +187,13 @@ function step(dt){
   if (vMag > lim.vFree){ const s = lim.vFree / vMag; velAct.vx*=s; velAct.vy*=s; }
   pose.x += velAct.vx * field.pxPerM * dt; pose.y += velAct.vy * field.pxPerM * dt; pose.th += velAct.om * dt;
   pose.x = clamp(pose.x, 60, fieldPxW-60); pose.y = clamp(pose.y, 60, fieldPxH-60);
+  const robotR = Math.hypot(profile.wheelbase_m + 2*BUMPER_M, profile.track_m + 2*BUMPER_M) * field.pxPerM / 2;
+  for (const o of obstacles){
+    const dx = pose.x - o.x, dy = pose.y - o.y;
+    const d = Math.hypot(dx, dy) || 1e-6;
+    const minD = o.r + robotR;
+    if (d < minD){ const s = minD / d; pose.x = o.x + dx * s; pose.y = o.y + dy * s; }
+  }
   if (defenderOn){ const dx=pose.x-defender.x, dy=pose.y-defender.y, d=Math.hypot(dx,dy)||1e-6; const vmax=defender.vmax*field.pxPerM; defender.x+=dx/d*vmax*dt; defender.y+=dy/d*vmax*dt; }
   checkPickups(); if (recording){ recordBuf.push({t:performance.now(), x:pose.x, y:pose.y, th:pose.th}); }
 }
@@ -193,8 +203,9 @@ function draw(){
   ctx.fillStyle = '#111820'; ctx.fillRect(0,0,fieldPxW, fieldPxH);
   ctx.strokeStyle = '#1f2a36'; ctx.lineWidth = 2; ctx.strokeRect(0,0,fieldPxW, fieldPxH);
   ctx.strokeStyle = '#172432'; ctx.setLineDash([8,8]); ctx.beginPath(); ctx.moveTo(fieldPxW/2,0); ctx.lineTo(fieldPxW/2,fieldPxH); ctx.stroke(); ctx.setLineDash([]);
-  ctx.strokeStyle = '#3fb950'; ctx.beginPath(); ctx.arc(scoreZone.x, scoreZone.y, scoreZone.r, 0, Math.PI*2); ctx.stroke();
-  for (const p of pickupTargets){ ctx.fillStyle = p.taken ? '#2d3b47' : '#f0b429'; ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, Math.PI*2); ctx.fill(); }
+  ctx.fillStyle = '#2b6cb0'; ctx.beginPath(); ctx.arc(station.x, station.y, station.r, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#e5534b'; ctx.beginPath(); ctx.arc(goal.x, goal.y, goal.r, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#555555'; for (const o of obstacles){ ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill(); }
   if (defenderOn){ ctx.fillStyle = '#b54747'; ctx.beginPath(); ctx.arc(defender.x, defender.y, defender.r, 0, Math.PI*2); ctx.fill(); }
   if (playing && playBuf.length){ const t = performance.now() - playT0; while (playIdx+1 < playBuf.length && (playBuf[playIdx+1].t - playBuf[0].t) <= t) playIdx++; ctx.strokeStyle = '#7b9acc'; ctx.lineWidth = 1.5; ctx.beginPath(); for(let i=1;i<=playIdx;i++){ const a=playBuf[i-1], b=playBuf[i]; ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);} ctx.stroke(); const gpt = playBuf[playIdx] || playBuf[playBuf.length - 1]; drawRobot(gpt.x, gpt.y, gpt.th, true); }
   drawRobot(pose.x, pose.y, pose.th, false);
@@ -220,8 +231,9 @@ function drawOrientationWindow(){
   orientCtx.fillStyle = '#7c2331';
   orientCtx.fillRect(-outerL/2, -outerW/2, outerL, bpx);
   orientCtx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
-  orientCtx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
   orientCtx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
+  orientCtx.fillStyle = '#00aa00';
+  orientCtx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
   // Scale wheel modules so all four fit without overlapping.
   const moduleHalf = Math.min(16 * fac, frameL / 4, frameW / 4);
   const wheelR = moduleHalf * (12 / 16);
@@ -257,8 +269,9 @@ function drawRobot(x,y,th,ghost){
   ctx.fillStyle = ghost ? '#7c2331aa' : '#7c2331';
   ctx.fillRect(-outerL/2, -outerW/2, outerL, bpx);
   ctx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
-  ctx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
   ctx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
+  ctx.fillStyle = ghost ? '#00aa00aa' : '#00aa00';
+  ctx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
 
   // Wheels are rendered only in the orientation window to reduce clutter.
 
@@ -273,20 +286,41 @@ function drawRobot(x,y,th,ghost){
   ctx.restore();
 }
 function roundRectPath(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); }
-function spawnPickups(n){ const arr=[]; for(let i=0;i<n;i++){ arr.push({x: 80+Math.random()*(fieldPxW-160), y: 120+Math.random()*(fieldPxH-240), taken:false}); } return arr; }
 function resetCycle(){
   pose.x = fieldPxW*0.25; pose.y = fieldPxH*0.75; pose.th = 0;
   velCmd={vx:0,vy:0,om:0}; velAct={vx:0,vy:0,om:0};
   moduleAngles=[0,0,0,0];
   carrying=false;
-  pickupTargets=spawnPickups(5);
-  scoreZone = { x: fieldPxW-140, y: 60, r: 50 };
+  station = { x: 60, y: fieldPxH - 60, r: 40 };
+  goal = { x: fieldPxW - 60, y: 60, r: 40 };
+  obstacles = [
+    { x: fieldPxW*0.4, y: fieldPxH*0.4, r: 40 },
+    { x: fieldPxW*0.6, y: fieldPxH*0.5, r: 50 },
+    { x: fieldPxW*0.3, y: fieldPxH*0.7, r: 35 }
+  ];
   defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, r:18 };
   cycleStart=performance.now(); pickupsDone=0; updateHUD();
   recording=false; recordBuf=[]; playing=false;
 }
 function updateHUD(){ const t=(performance.now()-cycleStart)/1000; hud.cycle.textContent = t.toFixed(2)+'s'; hud.pickups.textContent = pickupsDone; hud.spd.textContent = (Math.hypot(velAct.vx, velAct.vy)).toFixed(2); hud.om.textContent = (velAct.om).toFixed(2); }
-function checkPickups(){ if (!carrying){ for(const p of pickupTargets){ if(!p.taken && dist(pose.x, pose.y, p.x, p.y) < 34){ p.taken=true; carrying=true; break; } } } else { if (dist(pose.x, pose.y, scoreZone.x, scoreZone.y) < scoreZone.r){ carrying=false; pickupsDone += 1; updateHUD(); } } }
+function checkPickups(){
+  const intakeAng = wrapPI(pose.th + Math.PI);
+  if (!carrying){
+    const d = dist(pose.x, pose.y, station.x, station.y);
+    const ang = Math.atan2(station.y - pose.y, station.x - pose.x);
+    if (d < station.r && Math.abs(wrapPI(intakeAng - ang)) < Math.PI/4){
+      carrying = true;
+    }
+  } else {
+    const d = dist(pose.x, pose.y, goal.x, goal.y);
+    const ang = Math.atan2(goal.y - pose.y, goal.x - pose.x);
+    if (d < goal.r && Math.abs(wrapPI(intakeAng - ang)) < Math.PI/4){
+      carrying = false;
+      pickupsDone += 1;
+      updateHUD();
+    }
+  }
+}
 function openCal(){ ui.calPanel.style.display='block'; }
 function closeCal(){ ui.calPanel.style.display='none'; }
 function applyCal(){
