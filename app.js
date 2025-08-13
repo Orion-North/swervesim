@@ -71,6 +71,12 @@ const clamp = (v,a,b)=> Math.max(a, Math.min(b,v));
 const db = (v,d)=> Math.abs(v)<d ? 0 : (v - Math.sign(v)*d)/(1-d);
 function rotF(vx,vy,ang){ const c=Math.cos(ang), s=Math.sin(ang); return [c*vx - s*vy, s*vx + c*vy]; }
 const dist = (x1,y1,x2,y2)=> Math.hypot(x2-x1,y2-y1);
+const circleRectOverlap = (cx,cy,r,rx,ry,rw,rh)=>{
+  const nx = clamp(cx, rx, rx+rw);
+  const ny = clamp(cy, ry, ry+rh);
+  const dx = cx - nx, dy = cy - ny;
+  return (dx*dx + dy*dy) <= r*r;
+};
 function toast(msg){ ui.toast.textContent = msg; ui.toast.style.display='block'; setTimeout(()=>ui.toast.style.display='none', 2000); }
 function loadUI(){
   ui.ratioSel.innerHTML = '';
@@ -125,7 +131,7 @@ function resizeSim(){
 const layouts = {
   default(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
-    goal = { x: fieldPxW - 10, y: 20, r: 40, w: 20, h: 40 };
+    goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [
       { x: fieldPxW*0.4, y: fieldPxH*0.4, r: 40 },
       { x: fieldPxW*0.6, y: fieldPxH*0.5, r: 50 },
@@ -135,19 +141,50 @@ const layouts = {
   },
   clear(){
     station = { x: 60, y: fieldPxH - 60, r: 40 };
-    goal = { x: fieldPxW - 10, y: 20, r: 40, w: 20, h: 40 };
+    goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [];
     defender = { x: fieldPxW*0.7, y: fieldPxH*0.6, vmax:3.0, r:18 };
   },
   obstacle(){
     station = { x: fieldPxW*0.25, y: fieldPxH - 60, r: 40 };
-    goal = { x: fieldPxW - 10, y: 20, r: 40, w: 20, h: 40 };
+    goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
     obstacles = [
       { x: fieldPxW*0.5, y: fieldPxH*0.4, r: 60 },
       { x: fieldPxW*0.3, y: fieldPxH*0.6, r: 40 },
       { x: fieldPxW*0.7, y: fieldPxH*0.7, r: 30 }
     ];
     defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, r:18 };
+  },
+  slalom(){
+    station = { x: 60, y: fieldPxH - 60, r: 40 };
+    goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
+    obstacles = [
+      { x: fieldPxW*0.3, y: fieldPxH*0.5, r: 40 },
+      { x: fieldPxW*0.5, y: fieldPxH*0.3, r: 40 },
+      { x: fieldPxW*0.7, y: fieldPxH*0.5, r: 40 }
+    ];
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, r:18 };
+  },
+  gauntlet(){
+    station = { x: 60, y: fieldPxH - 60, r: 40 };
+    goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
+    obstacles = [
+      { x: fieldPxW*0.4, y: fieldPxH*0.6, r: 30 },
+      { x: fieldPxW*0.5, y: fieldPxH*0.4, r: 30 },
+      { x: fieldPxW*0.6, y: fieldPxH*0.6, r: 30 },
+      { x: fieldPxW*0.7, y: fieldPxH*0.4, r: 30 }
+    ];
+    defender = { x: fieldPxW*0.6, y: fieldPxH*0.5, vmax:3.0, r:18 };
+  },
+  cluster(){
+    station = { x: 60, y: fieldPxH - 60, r: 40 };
+    goal = { x: fieldPxW - 60, y: 60, r: 30, w: 40, h: 40 };
+    obstacles = [
+      { x: fieldPxW*0.5, y: fieldPxH*0.5, r: 60 },
+      { x: fieldPxW*0.35, y: fieldPxH*0.4, r: 30 },
+      { x: fieldPxW*0.65, y: fieldPxH*0.6, r: 30 }
+    ];
+    defender = { x: fieldPxW*0.55, y: fieldPxH*0.55, vmax:3.0, r:18 };
   }
 };
 function pollGamepad(){
@@ -348,17 +385,22 @@ function resetCycle(){
 }
 function updateHUD(){ const t=(performance.now()-cycleStart)/1000; hud.cycle.textContent = t.toFixed(2)+'s'; hud.pickups.textContent = pickupsDone; hud.spd.textContent = (Math.hypot(velAct.vx, velAct.vy)).toFixed(2); hud.om.textContent = (velAct.om).toFixed(2); }
 function checkPickups(){
-  const intakeAng = wrapPI(pose.th + Math.PI);
   if (!carrying){
+    const robotR = Math.hypot(
+      profile.wheelbase_m + 2*BUMPER_M,
+      profile.track_m + 2*BUMPER_M
+    ) * field.pxPerM / 2;
     const d = dist(pose.x, pose.y, ball.x, ball.y);
-    const ang = Math.atan2(ball.y - pose.y, ball.x - pose.x);
-    if (d < station.r && Math.abs(wrapPI(intakeAng - ang)) < Math.PI/4){
+    if (d < robotR + ball.r){
       carrying = true;
     }
   } else {
-    const d = dist(pose.x, pose.y, goal.x, goal.y);
-    const ang = Math.atan2(goal.y - pose.y, goal.x - pose.x);
-    if (d < goal.r && Math.abs(wrapPI(intakeAng - ang)) < Math.PI/4){
+    const p = ballPosOnRobot();
+    if (circleRectOverlap(
+      p.x, p.y, ball.r,
+      goal.x - goal.w/2, goal.y - goal.h/2,
+      goal.w, goal.h
+    )){
       carrying = false;
       ball.x = station.x; ball.y = station.y;
       pickupsDone += 1;
