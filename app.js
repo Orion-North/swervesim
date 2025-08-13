@@ -201,13 +201,13 @@ function drawOrientationWindow(){
   orientCtx.fillRect(-outerL/2, outerW/2 - bpx, outerL, bpx);
   orientCtx.fillRect(-outerL/2, -outerW/2, bpx, outerW);
   orientCtx.fillRect(outerL/2 - bpx, -outerW/2, bpx, outerW);
-  const cornerOffset = 28 * fac;
   const wheelR = 12 * fac;
+  const moduleHalf = 16 * fac;
   const corners = [
-    {x:+frameL/2 - cornerOffset, y:-frameW/2 + cornerOffset},
-    {x:+frameL/2 - cornerOffset, y:+frameW/2 - cornerOffset},
-    {x:-frameL/2 + cornerOffset, y:-frameW/2 + cornerOffset},
-    {x:-frameL/2 + cornerOffset, y:+frameW/2 - cornerOffset}
+    {x:+frameL/2 - moduleHalf, y:-frameW/2 + moduleHalf},
+    {x:+frameL/2 - moduleHalf, y:+frameW/2 - moduleHalf},
+    {x:-frameL/2 + moduleHalf, y:-frameW/2 + moduleHalf},
+    {x:-frameL/2 + moduleHalf, y:+frameW/2 - moduleHalf}
   ];
   for (let i=0;i<4;i++){
     const c = corners[i]; orientCtx.save(); orientCtx.translate(c.x, c.y);
@@ -239,12 +239,9 @@ function drawRobot(x,y,th,ghost){
   ctx.font = 'bold 18px system-ui';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const numOffsetW = outerW/2 - bpx/2;
-  const numOffsetL = outerL/2 - bpx/2;
-  ctx.save(); ctx.translate(0, -numOffsetW); ctx.fillText('7190', 0, 0); ctx.restore();
-  ctx.save(); ctx.rotate(Math.PI); ctx.translate(0, -numOffsetW); ctx.fillText('7190', 0, 0); ctx.restore();
-  ctx.save(); ctx.rotate(-Math.PI/2); ctx.translate(0, -numOffsetL); ctx.fillText('7190', 0, 0); ctx.restore();
-  ctx.save(); ctx.rotate(Math.PI/2); ctx.translate(0, -numOffsetL); ctx.fillText('7190', 0, 0); ctx.restore();
+  const numOffset = outerW/2 - bpx/2;
+  ctx.save(); ctx.translate(0, -numOffset); ctx.fillText('7190', 0, 0); ctx.restore();
+  ctx.save(); ctx.rotate(Math.PI); ctx.translate(0, -numOffset); ctx.fillText('7190', 0, 0); ctx.restore();
   ctx.restore();
 }
 function roundRectPath(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); }
