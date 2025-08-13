@@ -7,16 +7,26 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="startScreen">
+  <h2>Templeton Swerve Trainer — MAXSwerve</h2>
+  <label class="k">Motor</label>
+  <select id="motorSel">
+    <option value="NEO">NEO V1.1</option>
+    <option value="VORTEX">NEO Vortex</option>
+  </select>
+  <label class="k">Drive Ratio</label>
+  <select id="ratioSel"></select>
+  <label class="k">Bumper Color</label>
+  <select id="bumperSel">
+    <option value="red">Red</option>
+    <option value="blue">Blue</option>
+  </select>
+  <button id="startBtn">Start</button>
+</div>
+
 <div id="wrap">
   <header>
     <h1>Templeton Swerve Trainer — MAXSwerve</h1>
-    <label class="k">Motor</label>
-    <select id="motorSel">
-      <option value="NEO">NEO V1.1</option>
-      <option value="VORTEX">NEO Vortex</option>
-    </select>
-    <label class="k">Drive Ratio</label>
-    <select id="ratioSel"></select>
     <label class="k">Profile</label>
     <select id="profileSel"></select>
     <label class="k">Mode</label>
@@ -28,6 +38,7 @@
     <button id="defBtn">Defender: Off</button>
     <button id="recBtn">Record Ghost</button>
     <button id="playBtn">Play Ghost</button>
+    <button id="homeBtn">Return to Start</button>
     <span style="margin-left:auto;opacity:.7">LS=move, RS-X=rotate, <span class="k">Y</span> mode, <span class="k">A</span> reset</span>
   </header>
   <div id="sim">
