@@ -116,7 +116,7 @@ function pollGamepad(){
     inputQ.push({t, lx:0, ly:0, rx:0, btnY:false, btnA:false});
     return;
   }
-  const lx = db(-(gp.axes[0] ?? 0), profile.deadband);
+  const lx = db(gp.axes[0] ?? 0, profile.deadband);
   const ly = db(gp.axes[1] ?? 0, profile.deadband);
 
   // Different controllers expose the right stick X axis at different indices.
@@ -144,7 +144,7 @@ function consumeInput(){
   if (inp.btnA && !lastA){ resetCycle(); }
   lastA = inp.btnA;
   let vx =  inp.lx * lim.vFree;
-  let vy = -inp.ly * lim.vFree;
+  let vy =  inp.ly * lim.vFree;
   let om =  inp.rx * (lim.vFree / (Math.hypot(profile.wheelbase_m, profile.track_m)/2));
   if (!fieldCentric){ [vx, vy] = rotF(vx, vy, pose.th); }
   velCmd.vx = vx; velCmd.vy = vy; velCmd.om = om;
